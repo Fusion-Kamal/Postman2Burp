@@ -32,7 +32,7 @@ public class Postman2BurpUI {
         JScrollPane scrollPane = new JScrollPane(variablesTable);
 
         // Create table model and table for requests
-        requestTableModel = new DefaultTableModel(new Object[]{"No.", "URL"}, 0);
+        requestTableModel = new DefaultTableModel(new Object[]{"No.","Method","URL"}, 0);
         JTable requestTable = new JTable(requestTableModel);
         JScrollPane requestScrollPane = new JScrollPane(requestTable);
 
@@ -119,7 +119,7 @@ public class Postman2BurpUI {
         return panel;
     }
 
-    public void addRequestToTable(int number, String url) {
-        requestTableModel.addRow(new Object[]{number, url});
+    public void addRequestToTable(int number, String method , String url) {
+        requestTableModel.addRow(new Object[]{number,method, url});
     }
 }

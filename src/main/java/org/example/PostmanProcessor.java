@@ -1,4 +1,3 @@
-// src/main/java/org/example/PostmanProcessor.java
 package org.example;
 
 import burp.api.montoya.MontoyaApi;
@@ -38,8 +37,7 @@ public class PostmanProcessor {
                 for (JsonNode variable : variables) {
                     String key = variable.get("key").asText();
                     String value = variable.get("value").asText();
-
-                    api.logging().logToOutput("Variable: " + key + " = " + value);
+//                    api.logging().logToOutput("Variable: " + key + " = " + value);
                     variablesMap.put(key, value);
                 }
             }
@@ -63,85 +61,92 @@ public class PostmanProcessor {
 
     private void processRequest(JsonNode item) {
         String requestName = item.get("name").asText();
-        JsonNode pathNode = item.get("request").get("url").get("path");
-        String requestUrl = "";
-        for (int i = 0; i < pathNode.size(); i++) {
-            requestUrl = requestUrl + "/" + pathNode.get(i).asText();
-        }
-
         String requestMethod = item.get("request").get("method").asText();
-        JsonNode headersNode = item.get("request").get("header");
-        StringBuilder headers = new StringBuilder();
-        if (headersNode != null) {
-            for (JsonNode header : headersNode) {
-                headers.append(header.get("key").asText()).append(": ").append(header.get("value").asText()).append("\r\n");
+
+        try {
+            String rawUrl = replaceVariables(item.get("request").get("url").get("raw").asText());
+
+            if (!rawUrl.startsWith("http")) {
+                rawUrl = "https://" + rawUrl;
             }
-        }
-        String requestBody = "";
-        String contentType = "";
 
-        if (item.get("request").has("body") && !item.get("request").get("body").isNull()) {
-            JsonNode body = item.get("request").get("body");
-            contentType = body.get("mode").asText();
 
-            if ("urlencoded".equalsIgnoreCase(contentType)) {
-                StringBuilder urlEncodedBody = new StringBuilder();
-                for (JsonNode param : body.get("urlencoded")) {
-                    if (urlEncodedBody.length() > 0) {
-                        urlEncodedBody.append("&");
-                    }
-                    urlEncodedBody.append(param.get("key").asText())
-                            .append("=")
-                            .append(param.get("value").asText());
+            String protocol =  rawUrl.split("://")[0] ;
+
+            String requestUrl = rawUrl.split("://")[1].substring(rawUrl.split("://")[1].indexOf("/"));
+
+//            api.logging().logToOutput(requestUrl);
+
+            String host = rawUrl.split("://")[1].split("/")[0];
+            int port = protocol.equalsIgnoreCase("https") ? 443 : 80;
+            if (host.contains(":")) {
+                port = Integer.parseInt((host.split(":")[1]));
+            }
+
+
+            JsonNode headersNode = item.get("request").get("header");
+            StringBuilder headers = new StringBuilder();
+            if (headersNode != null) {
+                for (JsonNode header : headersNode) {
+                    headers.append(header.get("key").asText()).append(": ").append(header.get("value").asText()).append("\r\n");
                 }
-                requestBody = urlEncodedBody.toString();
-                headers.append("Content-Type: application/x-www-form-urlencoded\r\n");
-            } else if ("raw".equalsIgnoreCase(contentType)) {
-                requestBody = body.get("raw").asText();
-                headers.append("Content-Type: application/json\r\n");
             }
+            String requestBody = "";
+            String contentType = "";
+
+            if (item.get("request").has("body") && !item.get("request").get("body").isNull()) {
+                JsonNode body = item.get("request").get("body");
+                contentType = body.get("mode").asText();
+
+                if ("urlencoded".equalsIgnoreCase(contentType)) {
+                    StringBuilder urlEncodedBody = new StringBuilder();
+                    for (JsonNode param : body.get("urlencoded")) {
+                        if (urlEncodedBody.length() > 0) {
+                            urlEncodedBody.append("&");
+                        }
+                        urlEncodedBody.append(param.get("key").asText())
+                                .append("=")
+                                .append(param.get("value").asText());
+                    }
+                    requestBody = urlEncodedBody.toString();
+                    headers.append("Content-Type: application/x-www-form-urlencoded\r\n");
+                } else if ("raw".equalsIgnoreCase(contentType)) {
+                    requestBody = body.get("raw").asText();
+                    headers.append("Content-Type: application/json\r\n");
+                }
+            }
+
+
+            requestName = replaceVariables(requestName);
+            requestUrl = replaceVariables(requestUrl);
+            requestMethod = replaceVariables(requestMethod);
+            requestBody = replaceVariables(requestBody);
+
+
+            headers.append("User-Agent: PostmanRuntime/7.43.0\r\n");
+            headers.append("Accept: */*\r\n");
+            headers.append("Accept-Encoding: gzip, deflate, br\r\n");
+            headers.append("Cache-Control: no-cache\r\n");
+            headers.append("Postman-Token: 07dd37bc-a093-4ca0-a89f-0b566958ba9e\r\n");
+            headers.append("Connection: keep-alive\r\n");
+            headers.append("Host: " + host + "\r\n");
+
+            if (host.contains(":")) {
+                host = host.split(":")[0];
+            }
+
+            HttpService service = HttpService.httpService(host, port, protocol.equalsIgnoreCase("https"));
+            HttpRequest httpRequest = HttpRequest.httpRequest(service, requestMethod + " " + requestUrl + " HTTP/1.1\r\n" +
+                    headers + "\r\n" +
+                    (requestBody != null ? requestBody : ""));
+
+            httpRequestList.add(new Object[]{httpRequest, requestName});
+            requestCounter++;
+            ui.addRequestToTable(requestCounter,requestMethod, requestUrl);
+        } catch (Exception e) {
+            api.logging().logToOutput("ERROR : " +requestMethod +" "+ requestName+ " - " + e.getMessage());
         }
 
-
-        String protocol = item.get("request").get("url").has("protocol") ?
-                item.get("request").get("url").get("protocol").asText() : "https";
-
-
-
-        JsonNode hostNode = item.get("request").get("url").get("host");
-        String host = "";
-        for (int i = 0; i < hostNode.size(); i++) {
-            host = host + hostNode.get(i).asText() + ".";
-        }
-        host = host.replaceAll("\\.$", "");
-
-
-        requestName = replaceVariables(requestName);
-        requestUrl = replaceVariables(requestUrl);
-        requestMethod = replaceVariables(requestMethod);
-        requestBody = replaceVariables(requestBody);
-        host = replaceVariables(host);
-
-        headers.append("User-Agent: PostmanRuntime/7.43.0\r\n");
-        headers.append("Accept: */*\r\n");
-        headers.append("Accept-Encoding: gzip, deflate, br\r\n");
-        headers.append("Cache-Control: no-cache\r\n");
-        headers.append("Postman-Token: 07dd37bc-a093-4ca0-a89f-0b566958ba9e\r\n");
-        headers.append("Connection: keep-alive\r\n");
-        headers.append("Host: " + host + "\r\n");
-
-        int port = protocol.equalsIgnoreCase("https") ? 443 : 80;
-
-
-        HttpService service = HttpService.httpService(host, port, protocol.equalsIgnoreCase("https"));
-        HttpRequest httpRequest = HttpRequest.httpRequest(service, requestMethod + " " + requestUrl + " HTTP/1.1\r\n" +
-                headers + "\r\n" +
-                (requestBody != null ? requestBody : ""));
-
-        httpRequestList.add(new Object[]{httpRequest, requestName});
-
-        requestCounter++;
-        ui.addRequestToTable(requestCounter, requestUrl);
     }
 
     private String replaceVariables(String input) {
