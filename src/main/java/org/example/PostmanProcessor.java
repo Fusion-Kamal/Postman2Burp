@@ -70,27 +70,46 @@ public class PostmanProcessor {
                 rawUrl = "https://" + rawUrl;
             }
 
-
-            String protocol =  rawUrl.split("://")[0] ;
-
+            String protocol = rawUrl.split("://")[0];
             String requestUrl = rawUrl.split("://")[1].substring(rawUrl.split("://")[1].indexOf("/"));
-
-//            api.logging().logToOutput(requestUrl);
-
             String host = rawUrl.split("://")[1].split("/")[0];
             int port = protocol.equalsIgnoreCase("https") ? 443 : 80;
             if (host.contains(":")) {
                 port = Integer.parseInt((host.split(":")[1]));
             }
 
-
             JsonNode headersNode = item.get("request").get("header");
             StringBuilder headers = new StringBuilder();
             if (headersNode != null) {
                 for (JsonNode header : headersNode) {
-                    headers.append(header.get("key").asText()).append(": ").append(header.get("value").asText()).append("\r\n");
+                    headers.append(header.get("key").asText()).append(": ").append(replaceVariables(header.get("value").asText())).append("\r\n");
                 }
             }
+            headers.append("User-Agent: PostmanRuntime/7.43.0\r\n");
+            headers.append("Accept: */*\r\n");
+            headers.append("Accept-Encoding: gzip, deflate, br\r\n");
+            headers.append("Cache-Control: no-cache\r\n");
+            headers.append("Postman-Token: 07dd37bc-a093-4ca0-a89f-0b566958ba9e\r\n");
+            headers.append("Connection: keep-alive\r\n");
+            headers.append("Host: " + host + "\r\n");
+
+            // Handle authorization header
+            JsonNode request = item.get("request");
+            if (request.has("auth") && !request.get("auth").isNull()) {
+                JsonNode auth = request.get("auth");
+                String authType = auth.get("type").asText();
+                if ("bearer".equalsIgnoreCase(authType)) {
+                    String token = auth.get("bearer").get(0).get("value").asText();
+                    headers.append("Authorization: Bearer ").append(token).append("\r\n");
+                } else if ("basic".equalsIgnoreCase(authType)) {
+                    String username = auth.get("basic").get(0).get("value").asText();
+                    String password = auth.get("basic").get(1).get("value").asText();
+                    String basicAuth = java.util.Base64.getEncoder()
+                            .encodeToString((username + ":" + password).getBytes());
+                    headers.append("Authorization: Basic ").append(basicAuth).append("\r\n");
+                }
+            }
+
             String requestBody = "";
             String contentType = "";
 
@@ -116,20 +135,10 @@ public class PostmanProcessor {
                 }
             }
 
-
             requestName = replaceVariables(requestName);
             requestUrl = replaceVariables(requestUrl);
             requestMethod = replaceVariables(requestMethod);
             requestBody = replaceVariables(requestBody);
-
-
-            headers.append("User-Agent: PostmanRuntime/7.43.0\r\n");
-            headers.append("Accept: */*\r\n");
-            headers.append("Accept-Encoding: gzip, deflate, br\r\n");
-            headers.append("Cache-Control: no-cache\r\n");
-            headers.append("Postman-Token: 07dd37bc-a093-4ca0-a89f-0b566958ba9e\r\n");
-            headers.append("Connection: keep-alive\r\n");
-            headers.append("Host: " + host + "\r\n");
 
             if (host.contains(":")) {
                 host = host.split(":")[0];
@@ -142,13 +151,11 @@ public class PostmanProcessor {
 
             httpRequestList.add(new Object[]{httpRequest, requestName});
             requestCounter++;
-            ui.addRequestToTable(requestCounter,requestMethod, requestUrl);
+            ui.addRequestToTable(requestCounter, requestMethod, requestUrl);
         } catch (Exception e) {
-            api.logging().logToOutput("ERROR : " +requestMethod +" "+ requestName+ " - " + e.getMessage());
+            api.logging().logToOutput("ERROR : " + requestMethod + " " + requestName + " - " + e.getMessage());
         }
-
     }
-
     private String replaceVariables(String input) {
         if (input == null) return "";
         for (Map.Entry<String, String> entry : variablesMap.entrySet()) {
