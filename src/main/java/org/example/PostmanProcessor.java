@@ -8,15 +8,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class PostmanProcessor {
     private MontoyaApi api;
     private String postmanPath;
     private Map<String, String> variablesMap = new HashMap<>();
+    private Set<String> undefinedVariables = new HashSet<>();
     private Postman2BurpUI ui;
     private int requestCounter = 0;
     private List<Object[]> httpRequestList = new ArrayList<>();
@@ -37,7 +35,6 @@ public class PostmanProcessor {
                 for (JsonNode variable : variables) {
                     String key = variable.get("key").asText();
                     String value = variable.get("value").asText();
-//                    api.logging().logToOutput("Variable: " + key + " = " + value);
                     variablesMap.put(key, value);
                 }
             }
@@ -49,6 +46,7 @@ public class PostmanProcessor {
             api.logging().logToOutput("Error loading Postman collection: " + e.getMessage());
         }
     }
+
     private void processItems(JsonNode items) {
         for (JsonNode item : items) {
             if (item.has("item")) {
@@ -93,7 +91,6 @@ public class PostmanProcessor {
             headers.append("Connection: keep-alive\r\n");
             headers.append("Host: " + host + "\r\n");
 
-            // Handle authorization header
             JsonNode request = item.get("request");
             if (request.has("auth") && !request.get("auth").isNull()) {
                 JsonNode auth = request.get("auth");
@@ -156,13 +153,35 @@ public class PostmanProcessor {
             api.logging().logToOutput("ERROR : " + requestMethod + " " + requestName + " - " + e.getMessage());
         }
     }
+
     private String replaceVariables(String input) {
         if (input == null) return "";
         for (Map.Entry<String, String> entry : variablesMap.entrySet()) {
             String variablePlaceholder = "{{" + entry.getKey() + "}}";
             input = input.replace(variablePlaceholder, entry.getValue());
         }
+        for (String key : extractVariables(input)) {
+            if (!variablesMap.containsKey(key)) {
+                undefinedVariables.add(key);
+            }
+        }
         return input;
+    }
+
+    private Set<String> extractVariables(String input) {
+        Set<String> variables = new HashSet<>();
+        int startIndex = input.indexOf("{{");
+        while (startIndex != -1) {
+            int endIndex = input.indexOf("}}", startIndex);
+            if (endIndex != -1) {
+                String variable = input.substring(startIndex + 2, endIndex);
+                variables.add(variable);
+                startIndex = input.indexOf("{{", endIndex);
+            } else {
+                break;
+            }
+        }
+        return variables;
     }
 
     public Map<String, String> getVariablesMap() {
@@ -171,5 +190,14 @@ public class PostmanProcessor {
 
     public List<Object[]> getHttpRequestList() {
         return httpRequestList;
+    }
+
+    public Set<String> getUndefinedVariables() {
+        return undefinedVariables;
+    }
+
+    public void clearHttpRequestList() {
+        httpRequestList.clear();
+        requestCounter = 0;
     }
 }
