@@ -25,7 +25,7 @@ public class PostmanProcessor {
         this.ui = ui;
     }
 
-    public void processPostman() {
+    public void identifyVariables() {
         try {
             ObjectMapper mapper = new ObjectMapper();
             JsonNode postmanCollection = mapper.readTree(new File(postmanPath));
@@ -38,6 +38,77 @@ public class PostmanProcessor {
                     variablesMap.put(key, value);
                 }
             }
+
+            JsonNode items = postmanCollection.get("item");
+            extractVariablesFromItems(items);
+
+        } catch (IOException e) {
+            api.logging().logToOutput("Error loading Postman collection: " + e.getMessage());
+        }
+    }
+
+    private void extractVariablesFromItems(JsonNode items) {
+        for (JsonNode item : items) {
+            if (item.has("item")) {
+                extractVariablesFromItems(item.get("item"));
+            } else {
+                extractVariablesFromRequest(item);
+            }
+        }
+    }
+
+    private void extractVariablesFromRequest(JsonNode item) {
+        String rawUrl = item.get("request").get("url").get("raw").asText();
+        extractVariables(rawUrl);
+
+        JsonNode headersNode = item.get("request").get("header");
+        if (headersNode != null) {
+            for (JsonNode header : headersNode) {
+                extractVariables(header.get("value").asText());
+            }
+        }
+
+        if (item.get("request").has("body") && !item.get("request").get("body").isNull()) {
+            JsonNode body = item.get("request").get("body");
+            if ("urlencoded".equalsIgnoreCase(body.get("mode").asText())) {
+                for (JsonNode param : body.get("urlencoded")) {
+                    extractVariables(param.get("value").asText());
+                }
+            } else if ("raw".equalsIgnoreCase(body.get("mode").asText())) {
+                extractVariables(body.get("raw").asText());
+            }
+        }
+    }
+
+    private void extractVariables(String input) {
+        if (input == null) return;
+        for (String key : extractVariablesFromString(input)) {
+            if (!variablesMap.containsKey(key)) {
+                undefinedVariables.add(key);
+            }
+        }
+    }
+
+    private Set<String> extractVariablesFromString(String input) {
+        Set<String> variables = new HashSet<>();
+        int startIndex = input.indexOf("{{");
+        while (startIndex != -1) {
+            int endIndex = input.indexOf("}}", startIndex);
+            if (endIndex != -1) {
+                String variable = input.substring(startIndex + 2, endIndex);
+                variables.add(variable);
+                startIndex = input.indexOf("{{", endIndex);
+            } else {
+                break;
+            }
+        }
+        return variables;
+    }
+
+    public void processPostman() {
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode postmanCollection = mapper.readTree(new File(postmanPath));
 
             JsonNode items = postmanCollection.get("item");
             processItems(items);
@@ -160,7 +231,7 @@ public class PostmanProcessor {
             String variablePlaceholder = "{{" + entry.getKey() + "}}";
             input = input.replace(variablePlaceholder, entry.getValue());
         }
-        for (String key : extractVariables(input)) {
+        for (String key : extractVariablesFromString(input)) {
             if (!variablesMap.containsKey(key)) {
                 undefinedVariables.add(key);
             }
@@ -168,32 +239,16 @@ public class PostmanProcessor {
         return input;
     }
 
-    private Set<String> extractVariables(String input) {
-        Set<String> variables = new HashSet<>();
-        int startIndex = input.indexOf("{{");
-        while (startIndex != -1) {
-            int endIndex = input.indexOf("}}", startIndex);
-            if (endIndex != -1) {
-                String variable = input.substring(startIndex + 2, endIndex);
-                variables.add(variable);
-                startIndex = input.indexOf("{{", endIndex);
-            } else {
-                break;
-            }
-        }
-        return variables;
-    }
-
     public Map<String, String> getVariablesMap() {
         return variablesMap;
     }
 
-    public List<Object[]> getHttpRequestList() {
-        return httpRequestList;
-    }
-
     public Set<String> getUndefinedVariables() {
         return undefinedVariables;
+    }
+
+    public List<Object[]> getHttpRequestList() {
+        return httpRequestList;
     }
 
     public void clearHttpRequestList() {

@@ -11,188 +11,174 @@ import java.awt.event.MouseEvent;
 import java.io.File;
 import java.util.Map;
 
+
 public class Postman2BurpUI {
-    private JPanel panel;
-    private MontoyaApi api;
     private JTable variablesTable;
-    private DefaultTableModel requestTableModel;
-    private DefaultTableModel undefinedVariablesTableModel;
+    private DefaultTableModel variablesTableModel;
     private PostmanProcessor processor;
     private JTable requestTable;
-    private JTable undefinedVariablesTable;
-    private DefaultTableModel tableModel;
+    private DefaultTableModel requestTableModel;
+    private MontoyaApi api;
+    private JPanel panel;
 
-    this.api = api;
-    panel = new JPanel(new BorderLayout());
-    JButton importButton = new JButton("Import Postman Collection");
-    importButton.setPreferredSize(new Dimension(200, 30));
+    public Postman2BurpUI(MontoyaApi api) {
+        this.api = api;
+        panel = new JPanel(new BorderLayout());
+        JButton importButton = new JButton("Import Postman Collection");
+        importButton.setPreferredSize(new Dimension(200, 30));
 
-    // Create table model and table for variables
-    tableModel = new DefaultTableModel(new Object[]{"Variable", "Value"}, 0);
-    variablesTable = new JTable(tableModel);
-    JScrollPane scrollPane = new JScrollPane(variablesTable);
+        // Create table model and table for variables
+        variablesTableModel = new DefaultTableModel(new Object[]{"Variable", "Value"}, 0);
+        variablesTable = new JTable(variablesTableModel);
+        JScrollPane variablesScrollPane = new JScrollPane(variablesTable);
 
-    // Create table model and table for requests
-    requestTableModel = new DefaultTableModel(new Object[]{"No.", "Method", "URL"}, 0);
-    requestTable = new JTable(requestTableModel);
+        // Create table model and table for requests
+        requestTableModel = new DefaultTableModel(new Object[]{"No.", "Method", "URL"}, 0);
+        requestTable = new JTable(requestTableModel);
         requestTable.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
-    JScrollPane requestScrollPane = new JScrollPane(requestTable);
+        JScrollPane requestScrollPane = new JScrollPane(requestTable);
 
-    // Create table model and table for undefined variables
-    undefinedVariablesTableModel = new DefaultTableModel(new Object[]{"Variable", "Value"}, 0);
-    undefinedVariablesTable = new JTable(undefinedVariablesTableModel);
-    JScrollPane undefinedVariablesScrollPane = new JScrollPane(undefinedVariablesTable);
-
-    // Create buttons for Repeater, Intruder, Reprocess, and Clear
-    JButton repeaterButton = new JButton("Send to Repeater");
-    JButton intruderButton = new JButton("Send to Intruder");
-    JButton reprocessButton = new JButton("Reprocess Requests");
-    JButton clearButton = new JButton("Clear Requests");
+        // Create buttons for Repeater, Intruder, Process, and Clear
+        JButton repeaterButton = new JButton("Send to Repeater");
+        JButton intruderButton = new JButton("Send to Intruder");
+        JButton processButton = new JButton("Process Collection");
         repeaterButton.setEnabled(false);
         intruderButton.setEnabled(false);
 
         requestTable.getSelectionModel().addListSelectionListener(e -> {
-        boolean isSelected = requestTable.getSelectedRow() != -1;
-        repeaterButton.setEnabled(isSelected);
-        intruderButton.setEnabled(isSelected);
-    });
+            boolean isSelected = requestTable.getSelectedRow() != -1;
+            repeaterButton.setEnabled(isSelected);
+            intruderButton.setEnabled(isSelected);
+        });
 
         repeaterButton.addActionListener(e -> sendSelectedRequestsToRepeater());
         intruderButton.addActionListener(e -> sendSelectedRequestsToIntruder());
-        reprocessButton.addActionListener(e -> reprocessRequests());
-        clearButton.addActionListener(e -> clearRequests());
+        processButton.addActionListener(e -> processRequests()); ;
 
-    // Add right-click context menu
-    JPopupMenu contextMenu = new JPopupMenu();
-    JMenuItem sendToRepeater = new JMenuItem("Send to Repeater");
-    JMenuItem sendToIntruder = new JMenuItem("Send to Intruder");
+        // Add right-click context menu
+        JPopupMenu contextMenu = new JPopupMenu();
+        JMenuItem sendToRepeater = new JMenuItem("Send to Repeater");
+        JMenuItem sendToIntruder = new JMenuItem("Send to Intruder");
         contextMenu.add(sendToRepeater);
         contextMenu.add(sendToIntruder);
 
         requestTable.addMouseListener(new MouseAdapter() {
-        @Override
-        public void mousePressed(MouseEvent e) {
-            if (e.isPopupTrigger()) {
-                showContextMenu(e);
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    showContextMenu(e);
+                }
             }
-        }
 
-        @Override
-        public void mouseReleased(MouseEvent e) {
-            if (e.isPopupTrigger()) {
-                showContextMenu(e);
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    showContextMenu(e);
+                }
             }
-        }
 
-        private void showContextMenu(MouseEvent e) {
-            int row = requestTable.rowAtPoint(e.getPoint());
-            if (!requestTable.isRowSelected(row)) {
-                requestTable.addRowSelectionInterval(row, row);
+            private void showContextMenu(MouseEvent e) {
+                int row = requestTable.rowAtPoint(e.getPoint());
+                if (!requestTable.isRowSelected(row)) {
+                }
+                contextMenu.show(requestTable, e.getX(), e.getY());
             }
-            contextMenu.show(requestTable, e.getX(), e.getY());
-        }
-    }
-});
+        });
 
         sendToRepeater.addActionListener(e -> sendSelectedRequestsToRepeater());
         sendToIntruder.addActionListener(e -> sendSelectedRequestsToIntruder());
 
-// Create panel layout
-JPanel rightPanel = new JPanel(new BorderLayout());
-        rightPanel.add(requestScrollPane, BorderLayout.CENTER);
-
-JPanel buttonPanel = new JPanel(new FlowLayout());
+        // Create panel layout
+        JPanel buttonPanel = new JPanel(new FlowLayout());
         buttonPanel.add(repeaterButton);
         buttonPanel.add(intruderButton);
-        buttonPanel.add(reprocessButton);
-        buttonPanel.add(clearButton);
-        rightPanel.add(buttonPanel, BorderLayout.SOUTH);
+        buttonPanel.add(processButton);
 
-JPanel leftPanel = new JPanel(new BorderLayout());
-        leftPanel.add(scrollPane, BorderLayout.CENTER);
-        leftPanel.add(undefinedVariablesScrollPane, BorderLayout.SOUTH);
-
-JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftPanel, rightPanel);
+        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, variablesScrollPane, requestScrollPane);
         splitPane.setDividerLocation(300);
 
+        JPanel mainPanel = new JPanel(new BorderLayout());
+        mainPanel.add(splitPane, BorderLayout.CENTER);
+        mainPanel.add(buttonPanel, BorderLayout.SOUTH);
+
         importButton.addActionListener(e -> {
-JFileChooser fileChooser = new JFileChooser();
-int returnValue = fileChooser.showOpenDialog(null);
+            JFileChooser fileChooser = new JFileChooser();
+            int returnValue = fileChooser.showOpenDialog(null);
             if (returnValue == JFileChooser.APPROVE_OPTION) {
-File selectedFile = fileChooser.getSelectedFile();
-Postman2Burp.postmanpath = selectedFile.getAbsolutePath();
+                File selectedFile = fileChooser.getSelectedFile();
+                Postman2Burp.postmanpath = selectedFile.getAbsolutePath();
                 api.logging().logToOutput("Selected file: " + Postman2Burp.postmanpath);
-processor = new PostmanProcessor(api, Postman2Burp.postmanpath, Postman2BurpUI.this);
-                processor.processPostman();
+                processor = new PostmanProcessor(api, Postman2Burp.postmanpath, Postman2BurpUI.this);
+                processor.identifyVariables();
 
                 SwingUtilities.invokeLater(() -> {
-        tableModel.setRowCount(0);
+                    variablesTableModel.setRowCount(0);
                     for (Map.Entry<String, String> entry : processor.getVariablesMap().entrySet()) {
-        tableModel.addRow(new Object[]{entry.getKey(), entry.getValue()});
-        }
-updateUndefinedVariablesTable();
+                        variablesTableModel.addRow(new Object[]{entry.getKey(), entry.getValue()});
+                    }
+                    updateUndefinedVariablesTable();
                 });
-                        }
-                        });
+            }
+        });
 
-                        panel.add(importButton, BorderLayout.NORTH);
-        panel.add(splitPane, BorderLayout.CENTER);
+        panel.add(importButton, BorderLayout.NORTH);
+        panel.add(mainPanel, BorderLayout.CENTER);
     }
 
-public JPanel getPanel() {
-    return panel;
-}
-
-public void addRequestToTable(int number, String method, String url) {
-    requestTableModel.addRow(new Object[]{number, method, url});
-}
-
-private void sendSelectedRequestsToRepeater() {
-    int[] selectedRows = requestTable.getSelectedRows();
-    for (int row : selectedRows) {
-        Object[] requestData = processor.getHttpRequestList().get(row);
-        HttpRequest httpRequest = (HttpRequest) requestData[0];
-        String requestName = (String) requestData[1];
-        api.repeater().sendToRepeater(httpRequest, requestName);
+    public JPanel getPanel() {
+        return panel;
     }
-}
 
-private void sendSelectedRequestsToIntruder() {
-    int[] selectedRows = requestTable.getSelectedRows();
-    for (int row : selectedRows) {
-        Object[] requestData = processor.getHttpRequestList().get(row);
-        HttpRequest httpRequest = (HttpRequest) requestData[0];
-        String requestName = (String) requestData[1];
-        api.intruder().sendToIntruder(httpRequest, requestName);
+    public void addRequestToTable(int number, String method, String url) {
+        requestTableModel.addRow(new Object[]{number, method, url});
     }
-}
 
-private void reprocessRequests() {
-    clearRequests();
-    for (int i = 0; i < undefinedVariablesTableModel.getRowCount(); i++) {
-        String key = (String) undefinedVariablesTableModel.getValueAt(i, 0);
-        String value = (String) undefinedVariablesTableModel.getValueAt(i, 1);
-        processor.getVariablesMap().put(key, value);
-    }
-    processor.processPostman();
-    SwingUtilities.invokeLater(() -> {
-        tableModel.setRowCount(0);
-        for (Map.Entry<String, String> entry : processor.getVariablesMap().entrySet()) {
-            tableModel.addRow(new Object[]{entry.getKey(), entry.getValue()});
+    private void sendSelectedRequestsToRepeater() {
+        int[] selectedRows = requestTable.getSelectedRows();
+        for (int row : selectedRows) {
+            Object[] requestData = processor.getHttpRequestList().get(row);
+            HttpRequest httpRequest = (HttpRequest) requestData[0];
+            String requestName = (String) requestData[1];
+            api.repeater().sendToRepeater(httpRequest, requestName);
         }
-        updateUndefinedVariablesTable();
-    });
-}
-
-private void clearRequests() {
-    requestTableModel.setRowCount(0);
-    processor.clearHttpRequestList();
-}
-
-public void updateUndefinedVariablesTable() {
-    undefinedVariablesTableModel.setRowCount(0);
-    for (String key : processor.getUndefinedVariables()) {
-        undefinedVariablesTableModel.addRow(new Object[]{key, ""});
     }
-}
+
+    private void sendSelectedRequestsToIntruder() {
+        int[] selectedRows = requestTable.getSelectedRows();
+        for (int row : selectedRows) {
+            Object[] requestData = processor.getHttpRequestList().get(row);
+            HttpRequest httpRequest = (HttpRequest) requestData[0];
+            String requestName = (String) requestData[1];
+            api.intruder().sendToIntruder(httpRequest, requestName);
+        }
+    }
+
+    private void processRequests() {
+        clearRequests();
+        for (int i = 0; i < variablesTableModel.getRowCount(); i++) {
+            String key = (String) variablesTableModel.getValueAt(i, 0);
+            String value = (String) variablesTableModel.getValueAt(i, 1);
+            processor.getVariablesMap().put(key, value);
+        }
+        processor.processPostman();
+        SwingUtilities.invokeLater(() -> {
+            requestTableModel.setRowCount(0);
+            for (Object[] requestData : processor.getHttpRequestList()) {
+                HttpRequest httpRequest = (HttpRequest) requestData[0];
+                String requestName = (String) requestData[1];
+                requestTableModel.addRow(new Object[]{requestTableModel.getRowCount() + 1, httpRequest.method(), httpRequest.url()});
+            }
+        });
+    }
+
+    private void clearRequests() {
+        requestTableModel.setRowCount(0);
+        processor.clearHttpRequestList();
+    }
+
+    public void updateUndefinedVariablesTable() {
+        for (String key : processor.getUndefinedVariables()) {
+            variablesTableModel.addRow(new Object[]{key, ""});
+        }
+    }
 }
