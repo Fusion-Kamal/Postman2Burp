@@ -10,6 +10,8 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 
 public class Postman2BurpUI {
@@ -168,7 +170,20 @@ public class Postman2BurpUI {
                 String requestName = (String) requestData[1];
                 requestTableModel.addRow(new Object[]{requestTableModel.getRowCount() + 1, httpRequest.method(), httpRequest.url()});
             }
+            logSummary();
         });
+    }
+
+    private void logSummary() {
+        int totalRequests = processor.getHttpRequestList().size();
+        Map<String, Long> methodCounts = processor.getHttpRequestList().stream()
+                .map(req -> ((HttpRequest) req[0]).method().toUpperCase())
+                .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
+
+        api.logging().logToOutput("***      Summary    ***");
+        api.logging().logToOutput("Total requests: " + totalRequests);
+        methodCounts.forEach((method, count) -> api.logging().logToOutput(method + " requests: " + count));
+        api.logging().logToOutput("-----------------------------------------------------\n");
     }
 
     private void clearRequests() {
