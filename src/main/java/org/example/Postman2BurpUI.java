@@ -1,9 +1,6 @@
-package org.example;
+ package org.example;
 
 import burp.api.montoya.MontoyaApi;
-import burp.api.montoya.http.message.requests.HttpRequest;
-import burp.api.montoya.scanner.AuditConfiguration;
-import burp.api.montoya.scanner.BuiltInAuditConfiguration;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -13,20 +10,14 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 public class Postman2BurpUI {
-    private JTable variablesTable,requestTable;
-    private DefaultTableModel variablesTableModel;
-    private PostmanProcessor processor;
-    private MontoyaApi api;
+    private JTable variablesTable, requestTable;
+    private DefaultTableModel variablesTableModel, requestTableModel;
     private JPanel panel;
-    private  DefaultTableModel requestTableModel;
+    private Postman2BurpActions actions;
 
     public Postman2BurpUI(MontoyaApi api) {
-        this.api = api;
         panel = new JPanel(new BorderLayout());
         JButton importButton = new JButton("Import Postman Collection");
         importButton.setPreferredSize(new Dimension(200, 30));
@@ -44,11 +35,8 @@ public class Postman2BurpUI {
 
         // Create buttons for Repeater, Active Scan, Passive Scan, Process, and Clear
         JButton repeaterButton = new JButton("Send to Repeater(Ctrl+R)");
-
         JButton activeScanButton = new JButton("Send to Active Scan(Ctrl+I)");
-
         JButton passiveScanButton = new JButton("Send to Passive Scan");
-
         JButton processButton = new JButton("Process Collection");
 
         repeaterButton.setEnabled(false);
@@ -62,10 +50,13 @@ public class Postman2BurpUI {
             passiveScanButton.setEnabled(isSelected);
         });
 
-        repeaterButton.addActionListener(e -> sendSelectedRequestsToRepeater());
-        activeScanButton.addActionListener(e -> sendSelectedRequestsToActiveScan());
-        passiveScanButton.addActionListener(e -> sendSelectedRequestsToPassiveScan());
-        processButton.addActionListener(e -> processRequests());
+        // Initialize actions
+        actions = new Postman2BurpActions(api, this);
+
+        repeaterButton.addActionListener(e -> actions.sendSelectedRequestsToRepeater());
+        activeScanButton.addActionListener(e -> actions.sendSelectedRequestsToActiveScan());
+        passiveScanButton.addActionListener(e -> actions.sendSelectedRequestsToPassiveScan());
+        processButton.addActionListener(e -> actions.processRequests());
 
         // Add right-click context menu
         JPopupMenu contextMenu = new JPopupMenu();
@@ -100,8 +91,9 @@ public class Postman2BurpUI {
             }
         });
 
-        sendToRepeater.addActionListener(e -> sendSelectedRequestsToRepeater());
-        sendToActiveScan.addActionListener(e -> sendSelectedRequestsToActiveScan());
+        sendToActiveScan.addActionListener(e -> actions.sendSelectedRequestsToActiveScan());
+        sendToPassiveScan.addActionListener(e -> actions.sendSelectedRequestsToPassiveScan());
+
         // Create panel layout
         JPanel buttonPanel = new JPanel(new FlowLayout());
         buttonPanel.add(repeaterButton);
@@ -123,16 +115,7 @@ public class Postman2BurpUI {
                 File selectedFile = fileChooser.getSelectedFile();
                 Postman2Burp.postmanpath = selectedFile.getAbsolutePath();
                 api.logging().logToOutput("Selected file: " + Postman2Burp.postmanpath);
-                processor = new PostmanProcessor(api, Postman2Burp.postmanpath, Postman2BurpUI.this);
-                processor.identifyVariables();
-
-                SwingUtilities.invokeLater(() -> {
-                    variablesTableModel.setRowCount(0);
-                    for (Map.Entry<String, String> entry : processor.getVariablesMap().entrySet()) {
-                        variablesTableModel.addRow(new Object[]{entry.getKey(), entry.getValue()});
-                    }
-                    updateUndefinedVariablesTable();
-                });
+                actions.initializeProcessor(selectedFile.getAbsolutePath());
             }
         });
 
@@ -144,7 +127,7 @@ public class Postman2BurpUI {
         actionMap.put("sendToRepeater", new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                sendSelectedRequestsToRepeater();
+                actions.sendSelectedRequestsToRepeater();
             }
         });
 
@@ -152,7 +135,7 @@ public class Postman2BurpUI {
         actionMap.put("sendToActiveScan", new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                sendSelectedRequestsToActiveScan();
+                actions.sendSelectedRequestsToActiveScan();
             }
         });
 
@@ -164,80 +147,24 @@ public class Postman2BurpUI {
         return panel;
     }
 
+    public DefaultTableModel getVariablesTableModel() {
+        return variablesTableModel;
+    }
+
+    public DefaultTableModel getRequestTableModel() {
+        return requestTableModel;
+    }
+
+    public JTable getRequestTable() {
+        return requestTable;
+    }
+
     public void addRequestToTable(int number, String method, String url) {
         requestTableModel.addRow(new Object[]{number, method, url});
     }
 
-    private void sendSelectedRequestsToRepeater() {
-        int[] selectedRows = requestTable.getSelectedRows();
-        for (int row : selectedRows) {
-            Object[] requestData = processor.getHttpRequestList().get(row);
-            HttpRequest httpRequest = (HttpRequest) requestData[0];
-            String requestName = (String) requestData[1];
-            api.repeater().sendToRepeater(httpRequest, requestName);
-        }
-    }
-
-    private void sendSelectedRequestsToActiveScan() {
-        int[] selectedRows = requestTable.getSelectedRows();
-        for (int row : selectedRows) {
-            Object[] requestData = processor.getHttpRequestList().get(row);
-            HttpRequest httpRequest = (HttpRequest) requestData[0];
-            api.scanner()
-                    .startAudit(AuditConfiguration.auditConfiguration(BuiltInAuditConfiguration.LEGACY_ACTIVE_AUDIT_CHECKS))
-                    .addRequest(httpRequest);
-        }
-    }
-
-    private void sendSelectedRequestsToPassiveScan() {
-        int[] selectedRows = requestTable.getSelectedRows();
-        for (int row : selectedRows) {
-            Object[] requestData = processor.getHttpRequestList().get(row);
-            HttpRequest httpRequest = (HttpRequest) requestData[0];
-            api.scanner()
-                    .startAudit(AuditConfiguration.auditConfiguration(BuiltInAuditConfiguration.LEGACY_PASSIVE_AUDIT_CHECKS))
-                    .addRequest(httpRequest);
-        }
-    }
-
-    private void processRequests() {
-        clearRequests();
-        for (int i = 0; i < variablesTableModel.getRowCount(); i++) {
-            String key = (String) variablesTableModel.getValueAt(i, 0);
-            String value = (String) variablesTableModel.getValueAt(i, 1);
-            processor.getVariablesMap().put(key, value);
-        }
-        processor.processPostman();
-        SwingUtilities.invokeLater(() -> {
-            requestTableModel.setRowCount(0);
-            for (Object[] requestData : processor.getHttpRequestList()) {
-                HttpRequest httpRequest = (HttpRequest) requestData[0];
-                String requestName = (String) requestData[1];
-                requestTableModel.addRow(new Object[]{requestTableModel.getRowCount() + 1, httpRequest.method(), httpRequest.url()});
-            }
-            logSummary();
-        });
-    }
-
-    private void logSummary() {
-        int totalRequests = processor.getHttpRequestList().size();
-        Map<String, Long> methodCounts = processor.getHttpRequestList().stream()
-                .map(req -> ((HttpRequest) req[0]).method().toUpperCase())
-                .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
-
-        api.logging().logToOutput("***      Summary    ***");
-        api.logging().logToOutput("Total requests: " + totalRequests);
-        methodCounts.forEach((method, count) -> api.logging().logToOutput(method + " requests: " + count));
-        api.logging().logToOutput("-----------------------------------------------------\n");
-    }
-
-    private void clearRequests() {
-        requestTableModel.setRowCount(0);
-        processor.clearHttpRequestList();
-    }
-
     public void updateUndefinedVariablesTable() {
-        for (String key : processor.getUndefinedVariables()) {
+        for (String key : actions.getProcessor().getUndefinedVariables()) {
             variablesTableModel.addRow(new Object[]{key, ""});
         }
     }
