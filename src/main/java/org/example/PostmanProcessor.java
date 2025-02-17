@@ -2,6 +2,7 @@ package org.example;
 
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.http.HttpService;
+import burp.api.montoya.http.message.HttpHeader;
 import burp.api.montoya.http.message.requests.HttpRequest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,6 +19,8 @@ public class PostmanProcessor {
     private final Postman2BurpUI ui;
     private final List<Object[]> httpRequestList = new ArrayList<>();
     private int requestCounter = 0;
+    private Map<String, String> headersList = new LinkedHashMap<>();
+
 
     public PostmanProcessor(MontoyaApi api, String postmanPath, Postman2BurpUI ui) {
         this.api = api;
@@ -129,8 +132,13 @@ public class PostmanProcessor {
             StringBuilder headers = new StringBuilder();
             JsonNode headersNode = item.get("request").get("header");
             if (headersNode != null) {
-                headersNode.forEach(header -> headers.append(header.get("key").asText()).append(": ").append(replaceVariables(header.get("value").asText())).append("\r\n"));
-            }
+                headersNode.forEach(header -> {
+                    String headerKey = header.get("key").asText();
+                    String headerValue = replaceVariables(header.get("value").asText());
+                    headers.append(headerKey).append(": ").append(headerValue).append("\r\n");
+                 });            }
+
+
             headers.append("User-Agent: PostmanRuntime/7.43.0\r\n")
                     .append("Accept: */*\r\n")
                     .append("Accept-Encoding: gzip, deflate, br\r\n")
@@ -138,6 +146,8 @@ public class PostmanProcessor {
                     .append("Postman-Token: 07dd37bc-a093-4ca0-a89f-0b566958ba9e\r\n")
                     .append("Connection: keep-alive\r\n")
                     .append("Host: ").append(host).append("\r\n");
+
+
 
             JsonNode auth = item.get("request").get("auth");
             if (auth != null && !auth.isNull()) {
@@ -175,6 +185,12 @@ public class PostmanProcessor {
             HttpService service = HttpService.httpService(host.split(":")[0], port, protocol.equalsIgnoreCase("https"));
             HttpRequest httpRequest = HttpRequest.httpRequest(service, requestMethod + " " + requestUrl + " HTTP/1.1\r\n" + headers + "\r\n" + requestBody);
 
+
+            List<HttpHeader> headerss = httpRequest.headers();
+            for (HttpHeader header : headerss) {
+                headersList.put(header.name(), header.value());
+            }
+
             httpRequestList.add(new Object[]{httpRequest, requestName});
             ui.addRequestToTable(++requestCounter, requestMethod, requestUrl);
         } catch (Exception e) {
@@ -205,6 +221,10 @@ public class PostmanProcessor {
 
     public List<Object[]> getHttpRequestList() {
         return httpRequestList;
+    }
+
+    public Map<String, String> getHeadersList() {
+        return headersList;
     }
 
     public void clearHttpRequestList() {

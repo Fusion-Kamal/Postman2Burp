@@ -79,10 +79,14 @@ public class Postman2BurpActions {
         processor.processPostman();
         SwingUtilities.invokeLater(() -> {
             ui.getRequestTableModel().setRowCount(0);
+            ui.getHeadersTableModel().setRowCount(0);
             for (Object[] requestData : processor.getHttpRequestList()) {
                 HttpRequest httpRequest = (HttpRequest) requestData[0];
                 String requestName = (String) requestData[1];
                 ui.getRequestTableModel().addRow(new Object[]{ui.getRequestTableModel().getRowCount() + 1, httpRequest.method(), httpRequest.url()});
+            }
+            for (Map.Entry<String, String> header : processor.getHeadersList().entrySet()) {
+                ui.getHeadersTableModel().addRow(new Object[]{header.getKey(), header.getValue()});
             }
             logSummary();
         });
@@ -98,10 +102,13 @@ public class Postman2BurpActions {
         api.logging().logToOutput("Total requests: " + totalRequests);
         methodCounts.forEach((method, count) -> api.logging().logToOutput(method + " requests: " + count));
         api.logging().logToOutput("-----------------------------------------------------\n");
+
+//        processor.getHeadersList().forEach((key, value) -> api.logging().logToOutput(key + ": " + value));
     }
 
     private void clearRequests() {
         ui.getRequestTableModel().setRowCount(0);
+        ui.getHeadersTableModel().setRowCount(0);
         processor.clearHttpRequestList();
     }
 }

@@ -1,4 +1,4 @@
- package org.example;
+package org.example;
 
 import burp.api.montoya.MontoyaApi;
 
@@ -12,18 +12,16 @@ import java.awt.event.MouseEvent;
 import java.io.File;
 
 public class Postman2BurpUI {
-    private JTable variablesTable, requestTable;
-    private DefaultTableModel variablesTableModel, requestTableModel;
+    private JTable variablesTable, requestTable, headersTable;
+    private DefaultTableModel variablesTableModel, requestTableModel, headersTableModel;
     private JPanel panel;
     private Postman2BurpActions actions;
 
     public Postman2BurpUI(MontoyaApi api) {
         panel = new JPanel(new BorderLayout());
         JButton importButton = new JButton("Import Postman Collection");
-        importButton.setPreferredSize(new Dimension(200, 30));
-
         // Create table model and table for variables
-        variablesTableModel = new DefaultTableModel(new Object[]{"Variable", "Value"}, 0);
+        variablesTableModel = new DefaultTableModel(new Object[]{"Name", "Value"}, 0);
         variablesTable = new JTable(variablesTableModel);
         JScrollPane variablesScrollPane = new JScrollPane(variablesTable);
 
@@ -32,6 +30,11 @@ public class Postman2BurpUI {
         requestTable = new JTable(requestTableModel);
         requestTable.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         JScrollPane requestScrollPane = new JScrollPane(requestTable);
+
+        // Create table model and table for headers
+        headersTableModel = new DefaultTableModel(new Object[]{"Header", "Value"}, 0);
+        headersTable = new JTable(headersTableModel);
+        JScrollPane headersScrollPane = new JScrollPane(headersTable);
 
         // Create buttons for Repeater, Active Scan, Passive Scan, Process, and Clear
         JButton repeaterButton = new JButton("Send to Repeater(Ctrl+R)");
@@ -94,6 +97,14 @@ public class Postman2BurpUI {
         sendToActiveScan.addActionListener(e -> actions.sendSelectedRequestsToActiveScan());
         sendToPassiveScan.addActionListener(e -> actions.sendSelectedRequestsToPassiveScan());
 
+//        // Create labels for tables
+//        JLabel variablesLabel = new JLabel("VARIABLES");
+//        variablesLabel.setFont(variablesLabel.getFont().deriveFont(Font.BOLD));
+//        JLabel headersLabel = new JLabel("HEADERS");
+//        headersLabel.setFont(headersLabel.getFont().deriveFont(Font.BOLD));
+//        JLabel requestsLabel = new JLabel("REQUESTS");
+//        requestsLabel.setFont(requestsLabel.getFont().deriveFont(Font.BOLD));
+
         // Create panel layout
         JPanel buttonPanel = new JPanel(new FlowLayout());
         buttonPanel.add(repeaterButton);
@@ -101,11 +112,26 @@ public class Postman2BurpUI {
         buttonPanel.add(passiveScanButton);
         buttonPanel.add(processButton);
 
-        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, variablesScrollPane, requestScrollPane);
-        splitPane.setDividerLocation(300);
+        JPanel variablesPanel = new JPanel(new BorderLayout());
+//        variablesPanel.add(variablesLabel, BorderLayout.CENTER);
+        variablesPanel.add(variablesScrollPane, BorderLayout.CENTER);
+
+        JPanel headersPanel = new JPanel(new BorderLayout());
+//        headersPanel.add(headersLabel, BorderLayout.NORTH);
+        headersPanel.add(headersScrollPane, BorderLayout.CENTER);
+
+        JPanel requestsPanel = new JPanel(new BorderLayout());
+//        requestsPanel.add(requestsLabel, BorderLayout.NORTH);
+        requestsPanel.add(requestScrollPane, BorderLayout.CENTER);
+
+        JSplitPane leftSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, variablesPanel, headersPanel);
+        leftSplitPane.setDividerLocation(300);
+
+        JSplitPane mainSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftSplitPane, requestsPanel);
+        mainSplitPane.setDividerLocation(300);
 
         JPanel mainPanel = new JPanel(new BorderLayout());
-        mainPanel.add(splitPane, BorderLayout.CENTER);
+        mainPanel.add(mainSplitPane, BorderLayout.CENTER);
         mainPanel.add(buttonPanel, BorderLayout.SOUTH);
 
         importButton.addActionListener(e -> {
@@ -155,8 +181,16 @@ public class Postman2BurpUI {
         return requestTableModel;
     }
 
+    public DefaultTableModel getHeadersTableModel() {
+        return headersTableModel;
+    }
+
     public JTable getRequestTable() {
         return requestTable;
+    }
+
+    public JTable getHeadersTable() {
+        return headersTable;
     }
 
     public void addRequestToTable(int number, String method, String url) {
