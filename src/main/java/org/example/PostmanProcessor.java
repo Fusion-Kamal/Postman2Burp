@@ -136,7 +136,7 @@ public class PostmanProcessor {
                     String headerKey = header.get("key").asText();
                     String headerValue = replaceVariables(header.get("value").asText());
                     headers.append(headerKey).append(": ").append(headerValue).append("\r\n");
-                 });            }
+                });            }
 
 
             headers.append("User-Agent: PostmanRuntime/7.43.0\r\n")

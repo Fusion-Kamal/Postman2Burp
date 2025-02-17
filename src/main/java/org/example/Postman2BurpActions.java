@@ -1,12 +1,15 @@
 package org.example;
 
 import burp.api.montoya.MontoyaApi;
+import burp.api.montoya.http.message.HttpHeader;
 import burp.api.montoya.http.message.requests.HttpRequest;
 import burp.api.montoya.scanner.AuditConfiguration;
 import burp.api.montoya.scanner.BuiltInAuditConfiguration;
 
 import javax.swing.*;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -43,6 +46,11 @@ public class Postman2BurpActions {
             Object[] requestData = processor.getHttpRequestList().get(row);
             HttpRequest httpRequest = (HttpRequest) requestData[0];
             String requestName = (String) requestData[1];
+
+            // Update headers
+            httpRequest = updateHeaders(httpRequest);
+
+            // Send the updated request to the repeater
             api.repeater().sendToRepeater(httpRequest, requestName);
         }
     }
@@ -52,6 +60,10 @@ public class Postman2BurpActions {
         for (int row : selectedRows) {
             Object[] requestData = processor.getHttpRequestList().get(row);
             HttpRequest httpRequest = (HttpRequest) requestData[0];
+
+            // Update headers
+            httpRequest = updateHeaders(httpRequest);
+
             api.scanner()
                     .startAudit(AuditConfiguration.auditConfiguration(BuiltInAuditConfiguration.LEGACY_ACTIVE_AUDIT_CHECKS))
                     .addRequest(httpRequest);
@@ -63,10 +75,38 @@ public class Postman2BurpActions {
         for (int row : selectedRows) {
             Object[] requestData = processor.getHttpRequestList().get(row);
             HttpRequest httpRequest = (HttpRequest) requestData[0];
+
+            // Update headers
+            httpRequest = updateHeaders(httpRequest);
+
             api.scanner()
                     .startAudit(AuditConfiguration.auditConfiguration(BuiltInAuditConfiguration.LEGACY_PASSIVE_AUDIT_CHECKS))
                     .addRequest(httpRequest);
         }
+    }
+
+    private HttpRequest updateHeaders(HttpRequest httpRequest) {
+        // Retrieve existing headers
+        List<HttpHeader> existingHeaders = httpRequest.headers();
+
+        // Remove all existing headers
+        for (HttpHeader header : existingHeaders) {
+            httpRequest = httpRequest.withRemovedHeader(header.name());
+        }
+
+        // Update the headers with the values from the headersTableModel
+        for (int i = 0; i < ui.getHeadersTableModel().getRowCount(); i++) {
+            String headerKey = (String) ui.getHeadersTableModel().getValueAt(i, 0);
+
+            for (HttpHeader header : existingHeaders) {
+                if (Objects.equals(header.name(), headerKey)) {
+                    String headerValue = (String) ui.getHeadersTableModel().getValueAt(i, 1);
+                    httpRequest = httpRequest.withAddedHeader(HttpHeader.httpHeader(headerKey, headerValue));
+                }
+            }
+        }
+
+        return httpRequest;
     }
 
     public void processRequests() {
@@ -102,8 +142,6 @@ public class Postman2BurpActions {
         api.logging().logToOutput("Total requests: " + totalRequests);
         methodCounts.forEach((method, count) -> api.logging().logToOutput(method + " requests: " + count));
         api.logging().logToOutput("-----------------------------------------------------\n");
-
-//        processor.getHeadersList().forEach((key, value) -> api.logging().logToOutput(key + ": " + value));
     }
 
     private void clearRequests() {

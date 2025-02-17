@@ -94,6 +94,7 @@ public class Postman2BurpUI {
             }
         });
 
+        sendToRepeater.addActionListener(e -> actions.sendSelectedRequestsToRepeater());
         sendToActiveScan.addActionListener(e -> actions.sendSelectedRequestsToActiveScan());
         sendToPassiveScan.addActionListener(e -> actions.sendSelectedRequestsToPassiveScan());
 
