@@ -2,10 +2,14 @@ package org.example;
 
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.http.message.requests.HttpRequest;
+import burp.api.montoya.scanner.AuditConfiguration;
+import burp.api.montoya.scanner.BuiltInAuditConfiguration;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
@@ -13,15 +17,13 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-
 public class Postman2BurpUI {
-    private JTable variablesTable;
+    private JTable variablesTable,requestTable;
     private DefaultTableModel variablesTableModel;
     private PostmanProcessor processor;
-    private JTable requestTable;
-    private DefaultTableModel requestTableModel;
     private MontoyaApi api;
     private JPanel panel;
+    private  DefaultTableModel requestTableModel;
 
     public Postman2BurpUI(MontoyaApi api) {
         this.api = api;
@@ -40,29 +42,39 @@ public class Postman2BurpUI {
         requestTable.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         JScrollPane requestScrollPane = new JScrollPane(requestTable);
 
-        // Create buttons for Repeater, Intruder, Process, and Clear
-        JButton repeaterButton = new JButton("Send to Repeater");
-        JButton intruderButton = new JButton("Send to Intruder");
+        // Create buttons for Repeater, Active Scan, Passive Scan, Process, and Clear
+        JButton repeaterButton = new JButton("Send to Repeater(Ctrl+R)");
+
+        JButton activeScanButton = new JButton("Send to Active Scan(Ctrl+I)");
+
+        JButton passiveScanButton = new JButton("Send to Passive Scan");
+
         JButton processButton = new JButton("Process Collection");
+
         repeaterButton.setEnabled(false);
-        intruderButton.setEnabled(false);
+        activeScanButton.setEnabled(false);
+        passiveScanButton.setEnabled(false);
 
         requestTable.getSelectionModel().addListSelectionListener(e -> {
             boolean isSelected = requestTable.getSelectedRow() != -1;
             repeaterButton.setEnabled(isSelected);
-            intruderButton.setEnabled(isSelected);
+            activeScanButton.setEnabled(isSelected);
+            passiveScanButton.setEnabled(isSelected);
         });
 
         repeaterButton.addActionListener(e -> sendSelectedRequestsToRepeater());
-        intruderButton.addActionListener(e -> sendSelectedRequestsToIntruder());
-        processButton.addActionListener(e -> processRequests()); ;
+        activeScanButton.addActionListener(e -> sendSelectedRequestsToActiveScan());
+        passiveScanButton.addActionListener(e -> sendSelectedRequestsToPassiveScan());
+        processButton.addActionListener(e -> processRequests());
 
         // Add right-click context menu
         JPopupMenu contextMenu = new JPopupMenu();
         JMenuItem sendToRepeater = new JMenuItem("Send to Repeater");
-        JMenuItem sendToIntruder = new JMenuItem("Send to Intruder");
+        JMenuItem sendToActiveScan = new JMenuItem("Send to Active Scan");
+        JMenuItem sendToPassiveScan = new JMenuItem("Send to Passive Scan");
         contextMenu.add(sendToRepeater);
-        contextMenu.add(sendToIntruder);
+        contextMenu.add(sendToActiveScan);
+        contextMenu.add(sendToPassiveScan);
 
         requestTable.addMouseListener(new MouseAdapter() {
             @Override
@@ -82,18 +94,19 @@ public class Postman2BurpUI {
             private void showContextMenu(MouseEvent e) {
                 int row = requestTable.rowAtPoint(e.getPoint());
                 if (!requestTable.isRowSelected(row)) {
+                    requestTable.addRowSelectionInterval(row, row);
                 }
                 contextMenu.show(requestTable, e.getX(), e.getY());
             }
         });
 
         sendToRepeater.addActionListener(e -> sendSelectedRequestsToRepeater());
-        sendToIntruder.addActionListener(e -> sendSelectedRequestsToIntruder());
-
+        sendToActiveScan.addActionListener(e -> sendSelectedRequestsToActiveScan());
         // Create panel layout
         JPanel buttonPanel = new JPanel(new FlowLayout());
         buttonPanel.add(repeaterButton);
-        buttonPanel.add(intruderButton);
+        buttonPanel.add(activeScanButton);
+        buttonPanel.add(passiveScanButton);
         buttonPanel.add(processButton);
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, variablesScrollPane, requestScrollPane);
@@ -123,6 +136,26 @@ public class Postman2BurpUI {
             }
         });
 
+        // Add keyboard shortcuts
+        InputMap inputMap = requestTable.getInputMap(JComponent.WHEN_FOCUSED);
+        ActionMap actionMap = requestTable.getActionMap();
+
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_R, KeyEvent.CTRL_DOWN_MASK), "sendToRepeater");
+        actionMap.put("sendToRepeater", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                sendSelectedRequestsToRepeater();
+            }
+        });
+
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_I, KeyEvent.CTRL_DOWN_MASK), "sendToActiveScan");
+        actionMap.put("sendToActiveScan", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                sendSelectedRequestsToActiveScan();
+            }
+        });
+
         panel.add(importButton, BorderLayout.NORTH);
         panel.add(mainPanel, BorderLayout.CENTER);
     }
@@ -145,13 +178,25 @@ public class Postman2BurpUI {
         }
     }
 
-    private void sendSelectedRequestsToIntruder() {
+    private void sendSelectedRequestsToActiveScan() {
         int[] selectedRows = requestTable.getSelectedRows();
         for (int row : selectedRows) {
             Object[] requestData = processor.getHttpRequestList().get(row);
             HttpRequest httpRequest = (HttpRequest) requestData[0];
-            String requestName = (String) requestData[1];
-            api.intruder().sendToIntruder(httpRequest, requestName);
+            api.scanner()
+                    .startAudit(AuditConfiguration.auditConfiguration(BuiltInAuditConfiguration.LEGACY_ACTIVE_AUDIT_CHECKS))
+                    .addRequest(httpRequest);
+        }
+    }
+
+    private void sendSelectedRequestsToPassiveScan() {
+        int[] selectedRows = requestTable.getSelectedRows();
+        for (int row : selectedRows) {
+            Object[] requestData = processor.getHttpRequestList().get(row);
+            HttpRequest httpRequest = (HttpRequest) requestData[0];
+            api.scanner()
+                    .startAudit(AuditConfiguration.auditConfiguration(BuiltInAuditConfiguration.LEGACY_PASSIVE_AUDIT_CHECKS))
+                    .addRequest(httpRequest);
         }
     }
 
