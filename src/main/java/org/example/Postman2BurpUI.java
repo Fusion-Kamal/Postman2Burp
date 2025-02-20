@@ -3,6 +3,7 @@ package org.example;
 import burp.api.montoya.MontoyaApi;
 
 import javax.swing.*;
+import javax.swing.border.TitledBorder;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.ActionEvent;
@@ -20,21 +21,20 @@ public class Postman2BurpUI {
     public Postman2BurpUI(MontoyaApi api) {
         panel = new JPanel(new BorderLayout());
         JButton importButton = new JButton("Import Postman Collection");
+        JButton runCollectionButton = new JButton("Run Collection");
+
         // Create table model and table for variables
         variablesTableModel = new DefaultTableModel(new Object[]{"Name", "Value"}, 0);
         variablesTable = new JTable(variablesTableModel);
-        JScrollPane variablesScrollPane = new JScrollPane(variablesTable);
 
         // Create table model and table for requests
         requestTableModel = new DefaultTableModel(new Object[]{"No.", "Method", "URL"}, 0);
         requestTable = new JTable(requestTableModel);
         requestTable.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
-        JScrollPane requestScrollPane = new JScrollPane(requestTable);
 
         // Create table model and table for headers
         headersTableModel = new DefaultTableModel(new Object[]{"Header", "Value"}, 0);
         headersTable = new JTable(headersTableModel);
-        JScrollPane headersScrollPane = new JScrollPane(headersTable);
 
         // Create buttons for Repeater, Active Scan, Passive Scan, Process, and Clear
         JButton repeaterButton = new JButton("Send to Repeater(Ctrl+R)");
@@ -60,6 +60,7 @@ public class Postman2BurpUI {
         activeScanButton.addActionListener(e -> actions.sendSelectedRequestsToActiveScan());
         passiveScanButton.addActionListener(e -> actions.sendSelectedRequestsToPassiveScan());
         processButton.addActionListener(e -> actions.processRequests());
+        runCollectionButton.addActionListener(e -> actions.processRequests());
 
         // Add right-click context menu
         JPopupMenu contextMenu = new JPopupMenu();
@@ -98,32 +99,17 @@ public class Postman2BurpUI {
         sendToActiveScan.addActionListener(e -> actions.sendSelectedRequestsToActiveScan());
         sendToPassiveScan.addActionListener(e -> actions.sendSelectedRequestsToPassiveScan());
 
-//        // Create labels for tables
-//        JLabel variablesLabel = new JLabel("VARIABLES");
-//        variablesLabel.setFont(variablesLabel.getFont().deriveFont(Font.BOLD));
-//        JLabel headersLabel = new JLabel("HEADERS");
-//        headersLabel.setFont(headersLabel.getFont().deriveFont(Font.BOLD));
-//        JLabel requestsLabel = new JLabel("REQUESTS");
-//        requestsLabel.setFont(requestsLabel.getFont().deriveFont(Font.BOLD));
-
         // Create panel layout
         JPanel buttonPanel = new JPanel(new FlowLayout());
         buttonPanel.add(repeaterButton);
         buttonPanel.add(activeScanButton);
         buttonPanel.add(passiveScanButton);
         buttonPanel.add(processButton);
+        buttonPanel.add(runCollectionButton);
 
-        JPanel variablesPanel = new JPanel(new BorderLayout());
-//        variablesPanel.add(variablesLabel, BorderLayout.CENTER);
-        variablesPanel.add(variablesScrollPane, BorderLayout.CENTER);
-
-        JPanel headersPanel = new JPanel(new BorderLayout());
-//        headersPanel.add(headersLabel, BorderLayout.NORTH);
-        headersPanel.add(headersScrollPane, BorderLayout.CENTER);
-
-        JPanel requestsPanel = new JPanel(new BorderLayout());
-//        requestsPanel.add(requestsLabel, BorderLayout.NORTH);
-        requestsPanel.add(requestScrollPane, BorderLayout.CENTER);
+        JPanel variablesPanel = createTitledPanel("Variables", new JScrollPane(variablesTable));
+        JPanel headersPanel = createTitledPanel("Headers", new JScrollPane(headersTable));
+        JPanel requestsPanel = createTitledPanel("Requests", new JScrollPane(requestTable));
 
         JSplitPane leftSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, variablesPanel, headersPanel);
         leftSplitPane.setDividerLocation(300);
@@ -168,6 +154,15 @@ public class Postman2BurpUI {
 
         panel.add(importButton, BorderLayout.NORTH);
         panel.add(mainPanel, BorderLayout.CENTER);
+    }
+
+    private JPanel createTitledPanel(String title, Component component) {
+        JPanel panel = new JPanel(new BorderLayout());
+        TitledBorder border = BorderFactory.createTitledBorder(
+                BorderFactory.createEtchedBorder(), title, TitledBorder.LEFT, TitledBorder.TOP);
+        panel.setBorder(border);
+        panel.add(component, BorderLayout.CENTER);
+        return panel;
     }
 
     public JPanel getPanel() {
